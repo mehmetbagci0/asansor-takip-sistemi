@@ -1,0 +1,260 @@
+// Asansör Takip Sistemi - Veritabanı Şeması
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Kullanıcılar
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  password      String
+  firstName     String
+  lastName      String
+  phone         String?
+  role          UserRole @default(TECHNICIAN)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  maintenances  Maintenance[]
+  faults        Fault[]
+  Company       Company?  @relation(fields: [companyId], references: [id])
+  companyId     String?
+}
+
+enum UserRole {
+  ADMIN
+  TECHNICIAN
+  CUSTOMER
+  MANAGER
+}
+
+// Firmalar
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  taxNumber   String?  @unique
+  address     String?
+  phone       String?
+  email       String?
+  website     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  users       User[]
+  buildings   Building[]
+  contracts   Contract[]
+}
+
+// Binalar
+model Building {
+  id          String   @id @default(cuid())
+  name        String
+  address     String
+  city        String?
+  district    String?
+  postalCode  String?
+  latitude    Float?
+  longitude   Float?
+  contactName String?
+  contactPhone String?
+  contactEmail String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  company     Company?  @relation(fields: [companyId], references: [id])
+  companyId   String?
+  elevators   Elevator[]
+}
+
+// Asansörler
+model Elevator {
+  id              String         @id @default(cuid())
+  serialNumber    String         @unique
+  type            ElevatorType
+  brand           String?
+  model           String?
+  capacity        Int?
+  personCapacity  Int?
+  floors          Int?
+  yearInstalled   Int?
+  ceNumber        String?
+  status          ElevatorStatus @default(ACTIVE)
+  qrCode          String?        @unique
+  notes           String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  building        Building       @relation(fields: [buildingId], references: [id])
+  buildingId      String
+  maintenances    Maintenance[]
+  faults          Fault[]
+  documents       Document[]
+  inspections     Inspection[]
+}
+
+enum ElevatorType {
+  PASSENGER
+  FREIGHT
+  HYBRID
+}
+
+enum ElevatorStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+  FAULTY
+}
+
+// Bakım Kayıtları
+model Maintenance {
+  id              String            @id @default(cuid())
+  scheduledDate   DateTime
+  completedDate   DateTime?
+  status          MaintenanceStatus @default(SCHEDULED)
+  duration        Int?
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  elevator        Elevator          @relation(fields: [elevatorId], references: [id])
+  elevatorId      String
+  technician      User?             @relation(fields: [technicianId], references: [id])
+  technicianId    String?
+  checklistItems  MaintenanceChecklistItem[]
+  usedMaterials   UsedMaterial[]
+  documents       Document[]
+  
+  technicianSignature  String?
+  customerSignature    String?
+  customerName         String?
+}
+
+enum MaintenanceStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+// Kontrol Listesi Template (46 madde)
+model ChecklistTemplate {
+  id          String   @id @default(cuid())
+  category    String
+  itemNumber  Int
+  description String
+  isActive    Boolean  @default(true)
+  order       Int
+  createdAt   DateTime @default(now())
+}
+
+// Bakım Kontrol Maddeleri
+model MaintenanceChecklistItem {
+  id            String      @id @default(cuid())
+  category      String
+  itemNumber    Int
+  description   String
+  isCompliant   Boolean?
+  notes         String?
+  photoUrl      String?
+  
+  maintenance   Maintenance @relation(fields: [maintenanceId], references: [id], onDelete: Cascade)
+  maintenanceId String
+}
+
+// Kullanılan Malzemeler
+model UsedMaterial {
+  id            String      @id @default(cuid())
+  name          String
+  quantity      Int
+  unit          String?
+  notes         String?
+  
+  maintenance   Maintenance @relation(fields: [maintenanceId], references: [id], onDelete: Cascade)
+  maintenanceId String
+}
+
+// Arızalar
+model Fault {
+  id            String      @id @default(cuid())
+  title         String
+  description   String
+  status        FaultStatus @default(OPEN)
+  priority      String?
+  reportedDate  DateTime    @default(now())
+  resolvedDate  DateTime?
+  resolution    String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  elevator      Elevator    @relation(fields: [elevatorId], references: [id])
+  elevatorId    String
+  assignedTo    User?       @relation(fields: [assignedToId], references: [id])
+  assignedToId  String?
+  documents     Document[]
+}
+
+enum FaultStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+// Fenni Muayeneler
+model Inspection {
+  id              String   @id @default(cuid())
+  inspectionDate  DateTime
+  expiryDate      DateTime
+  result          String?
+  inspectorName   String?
+  certificateNo   String?
+  notes           String?
+  documentUrl     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  elevator        Elevator @relation(fields: [elevatorId], references: [id])
+  elevatorId      String
+}
+
+// Sözleşmeler
+model Contract {
+  id            String   @id @default(cuid())
+  contractNo    String   @unique
+  startDate     DateTime
+  endDate       DateTime
+  amount        Float?
+  paymentPeriod String?
+  notes         String?
+  documentUrl   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  company       Company  @relation(fields: [companyId], references: [id])
+  companyId     String
+}
+
+// Dökümanlar
+model Document {
+  id            String   @id @default(cuid())
+  fileName      String
+  fileUrl       String
+  fileType      String
+  fileSize      Int?
+  description   String?
+  createdAt     DateTime @default(now())
+  
+  elevator      Elevator? @relation(fields: [elevatorId], references: [id])
+  elevatorId    String?
+  maintenance   Maintenance? @relation(fields: [maintenanceId], references: [id])
+  maintenanceId String?
+  fault         Fault?    @relation(fields: [faultId], references: [id])
+  faultId       String?
+}
